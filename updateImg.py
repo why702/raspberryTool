@@ -2,6 +2,7 @@ import sys
 import os.path
 from datetime import date
 import argparse
+import glob
 
 from linebot import LineBotApi
 from linebot.models import ImageSendMessage
@@ -51,6 +52,24 @@ def main(args):
         imgurl = update_imgur(imgPath)
         print(imgurl)
         update_line(imgurl)
+
+    if os.path.exists(args.dir):
+        for imgPath in glob.glob(os.path.join(args.dir, '*.jpg')):
+            imgurl = update_imgur(imgPath)
+            print(imgurl)
+            update_line(imgurl)
+        for imgPath in glob.glob(os.path.join(args.dir, '*.jpeg')):
+            imgurl = update_imgur(imgPath)
+            print(imgurl)
+            update_line(imgurl)
+        for imgPath in glob.glob(os.path.join(args.dir, '*.png')):
+            imgurl = update_imgur(imgPath)
+            print(imgurl)
+            update_line(imgurl)
+        for imgPath in glob.glob(os.path.join(args.dir, '*.bmp')):
+            imgurl = update_imgur(imgPath)
+            print(imgurl)
+            update_line(imgurl)
 
 def parse_arguments(argv):
     parser = argparse.ArgumentParser()
