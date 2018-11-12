@@ -31,6 +31,8 @@ from aiy.vision.leds import Leds
 from aiy.vision.leds import PrivacyLed
 from aiy.vision.models import face_detection
 
+from updateImg import update_line, update_imgur
+
 from contextlib import contextmanager
 from gpiozero import Button
 from picamera import PiCamera
@@ -189,6 +191,8 @@ class Photographer(Service):
             stream.seek(0)
             with open(filename, 'wb') as file:
                 file.write(stream.read())
+            imgurl = update_imgur(filename)
+            update_line(imgurl)
 
         if faces:
             filename = self._make_filename(timestamp, annotated=True)
@@ -200,6 +204,8 @@ class Photographer(Service):
                     self._draw_face(draw, face)
                 del draw
                 image.save(filename)
+            imgurl = update_imgur(filename)
+            update_line(imgurl)
 
     def update_faces(self, faces):
         self._faces.value = faces
