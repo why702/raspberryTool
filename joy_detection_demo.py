@@ -191,8 +191,6 @@ class Photographer(Service):
             stream.seek(0)
             with open(filename, 'wb') as file:
                 file.write(stream.read())
-            imgurl = update_imgur(filename)
-            update_line(imgurl)
 
         if faces:
             filename = self._make_filename(timestamp, annotated=True)
@@ -204,8 +202,9 @@ class Photographer(Service):
                     self._draw_face(draw, face)
                 del draw
                 image.save(filename)
-            imgurl = update_imgur(filename)
-            update_line(imgurl)
+
+        imgurl = update_imgur(filename)
+        update_line(imgurl)
 
     def update_faces(self, faces):
         self._faces.value = faces
