@@ -55,7 +55,6 @@ SAD_SOUND = ('C6q', 'E5q', 'C5q')
 MODEL_LOAD_SOUND = ('C6w', 'c6w', 'C6w')
 BEEP_SOUND = ('E6q', 'C6q')
 
-
 @contextmanager
 def stopwatch(message):
     try:
@@ -244,6 +243,7 @@ class JoyDetector(object):
         self._done = threading.Event()
         signal.signal(signal.SIGINT, lambda signal, frame: self.stop())
         signal.signal(signal.SIGTERM, lambda signal, frame: self.stop())
+        self.faceNum = 0
 
     def stop(self):
         logger.info('Stopping...')
@@ -290,6 +290,10 @@ class JoyDetector(object):
                             player.play(SAD_SOUND)
 
                         prev_joy_score = joy_score
+
+                        if self.faceNum != len(faces):
+                            self.faceNum = len(faces)
+                            take_photo
 
                         if self._done.is_set() or i == num_frames:
                             break
