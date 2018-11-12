@@ -291,7 +291,7 @@ class JoyDetector(object):
 
                         prev_joy_score = joy_score
 
-                        if i % 30 == 0:
+                        if faces and i % 20 == 0:
                             if self.faceNum < len(faces):
                                 take_photo()
                             self.faceNum = len(faces)
