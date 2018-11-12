@@ -50,25 +50,25 @@ def update_imgur(imgPath):
 def main(args):
     for imgPath in args.images:
         imgurl = update_imgur(imgPath)
-        print(imgurl)
+        print('update {} as {}'.format(imgPath, imgurl))
         update_line(imgurl)
 
     if os.path.exists(args.dir):
         for imgPath in glob.glob(os.path.join(args.dir, '*.jpg')):
             imgurl = update_imgur(imgPath)
-            print(imgurl)
+            print('update {} as {}'.format(imgPath, imgurl))
             update_line(imgurl)
         for imgPath in glob.glob(os.path.join(args.dir, '*.jpeg')):
             imgurl = update_imgur(imgPath)
-            print(imgurl)
+            print('update {} as {}'.format(imgPath, imgurl))
             update_line(imgurl)
         for imgPath in glob.glob(os.path.join(args.dir, '*.png')):
             imgurl = update_imgur(imgPath)
-            print(imgurl)
+            print('update {} as {}'.format(imgPath, imgurl))
             update_line(imgurl)
         for imgPath in glob.glob(os.path.join(args.dir, '*.bmp')):
             imgurl = update_imgur(imgPath)
-            print(imgurl)
+            print('update {} as {}'.format(imgPath, imgurl))
             update_line(imgurl)
 
 def parse_arguments(argv):
