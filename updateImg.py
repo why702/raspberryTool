@@ -41,6 +41,7 @@ def update_imgur(imgPath):
         if os.path.exists(imgPath) == True:
             image = client.upload_from_path(imgPath, config=config, anon=False)
             imgurl = 'https://i.imgur.com/{}.png'.format(image.get('id'))
+            print('update {} successfully!'.format(imgPath))
     except ImgurClientError as e:
         print(e.error_message)
         print(e.status_code)
