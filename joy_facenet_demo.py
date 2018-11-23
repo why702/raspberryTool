@@ -30,6 +30,7 @@ from aiy.vision.inference import CameraInference
 from aiy.vision.leds import Leds
 from aiy.vision.leds import PrivacyLed
 from aiy.vision.models import face_detection
+from aiy.vision.models import face_recognition
 
 from updateImg import update_line, update_imgur
 
@@ -192,6 +193,18 @@ class Photographer(Service):
                 file.write(stream.read())
 
         if faces:
+            with ImageInference(face_detection.model()) as inference_facenet:
+                #resize
+                image = Image.open(stream)
+                for face in faces:
+                    cropArea = face.bounding_box
+                    image = image.crop(cropArea)
+                    image = image.thumbnail((160,160),Image.ANTIALIAS)
+                    image.show()
+                    result = inference_facenet.run(image)
+                    facesnet = face_recognition.get_faces(result)
+                    print(facesnet)
+
             filename = self._make_filename(timestamp, annotated=True)
             with stopwatch('Saving annotated %s' % filename):
                 stream.seek(0)
@@ -290,12 +303,6 @@ class JoyDetector(object):
                             player.play(SAD_SOUND)
 
                         prev_joy_score = joy_score
-
-                        if i % 20 == 0:
-                            if faces and self.faceNum < len(faces):
-                                take_photo()
-                            self.faceNum = len(faces)
-                            print(self.faceNum)
 
                         if self._done.is_set() or i == num_frames:
                             break
