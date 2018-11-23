@@ -17,13 +17,13 @@ from collections import namedtuple
 
 from aiy.vision.inference import ModelDescriptor
 from aiy.vision.models import utils
+import os
 
 
 _COMPUTE_GRAPH_NAME = 'facenet.binaryproto'
 
-Facenet = namedtuple('Face', ('embeddings'))
-
 def model():
+    print(os.path.exists(_COMPUTE_GRAPH_NAME))
     return ModelDescriptor(
         name='FaceRecognition',
         input_shape=(1, 160, 160, 3),
