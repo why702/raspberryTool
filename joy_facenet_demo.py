@@ -237,10 +237,12 @@ class Photographer(Service):
                 image = Image.open(stream)
                 for face in faces:
                     cropArea = face.bounding_box
-                    img = image.crop(cropArea)
-                    img = img.thumbnail((160,160),Image.ANTIALIAS)
-                    img.save('/home/pi/Pictures/test.jpeg')
-                    result = inference_facenet.run(img)
+                    image.save('/home/pi/Pictures/test0.jpeg')
+                    image = image.crop(cropArea)
+                    image.save('/home/pi/Pictures/test1.jpeg')
+                    image = image.thumbnail((160,160),Image.ANTIALIAS)
+                    image.save('/home/pi/Pictures/test2.jpeg')
+                    result = inference_facenet.run(image)
                     facesnet = face_recognition.get_faces(result)
                     print(facesnet)
 
