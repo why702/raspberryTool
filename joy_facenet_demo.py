@@ -233,13 +233,14 @@ class Photographer(Service):
         if faces:
             with ImageInference(face_detection.model()) as inference_facenet:
                 #resize
+                stream.seek(0)
                 image = Image.open(stream)
                 for face in faces:
                     cropArea = face.bounding_box
-                    image = image.crop(cropArea)
-                    image = image.thumbnail((160,160),Image.ANTIALIAS)
-                    image.save('/home/pi/Pictures/test.jpeg')
-                    result = inference_facenet.run(image)
+                    img = image.crop(cropArea)
+                    img = img.thumbnail((160,160),Image.ANTIALIAS)
+                    img.save('/home/pi/Pictures/test.jpeg')
+                    result = inference_facenet.run(img)
                     facesnet = face_recognition.get_faces(result)
                     print(facesnet)
 
