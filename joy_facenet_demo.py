@@ -15,65 +15,93 @@
 """Joy detection demo."""
 import argparse
 import collections
+import contextlib
 import io
 import logging
 import math
 import os
 import queue
 import signal
+import sys
 import threading
 import time
 
-from aiy._drivers._hat import get_aiy_device_name
-from aiy.toneplayer import TonePlayer
-from aiy.vision.inference import CameraInference
-from aiy.vision.leds import Leds
-from aiy.vision.leds import PrivacyLed
-from aiy.vision.models import face_detection
-from aiy.vision.models import face_recognition
-
-from updateImg import update_line, update_imgur
-
-from contextlib import contextmanager
-from gpiozero import Button
+from PIL import Image, ImageDraw, ImageFont
 from picamera import PiCamera
 
-from PIL import Image
-from PIL import ImageDraw
-from PIL import ImageFont
+from aiy.board import Board
+from aiy.leds import Color, Leds, Pattern, PrivacyLed
+from aiy.toneplayer import TonePlayer
+from aiy.vision.inference import CameraInference
+from aiy.vision.inference import ImageInference
+from aiy.vision.models import face_detection
+from aiy.vision.models import face_recognition
+from aiy.vision.streaming.server import StreamingServer
+from aiy.vision.streaming import svg
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 JOY_COLOR = (255, 70, 0)
 SAD_COLOR = (0, 0, 64)
 
-JOY_SCORE_PEAK = 0.85
-JOY_SCORE_MIN = 0.10
+JOY_SCORE_HIGH = 0.85
+JOY_SCORE_LOW = 0.10
 
 JOY_SOUND = ('C5q', 'E5q', 'C6q')
 SAD_SOUND = ('C6q', 'E5q', 'C5q')
 MODEL_LOAD_SOUND = ('C6w', 'c6w', 'C6w')
 BEEP_SOUND = ('E6q', 'C6q')
 
-@contextmanager
+FONT_FILE = '/usr/share/fonts/truetype/freefont/FreeSans.ttf'
+
+BUZZER_GPIO = 22
+
+@contextlib.contextmanager
 def stopwatch(message):
     try:
         logger.info('%s...', message)
-        begin = time.time()
+        begin = time.monotonic()
         yield
     finally:
-        end = time.time()
+        end = time.monotonic()
         logger.info('%s done. (%fs)', message, end - begin)
 
 
-def blend(color_a, color_b, alpha):
-    return tuple([math.ceil(alpha * color_a[i] + (1.0 - alpha) * color_b[i]) for i in range(3)])
+def run_inference(num_frames, on_loaded):
+    """Yields (faces, (frame_width, frame_height)) tuples."""
+    with CameraInference(face_detection.model()) as inference:
+        on_loaded()
+        for result in inference.run(num_frames):
+            yield face_detection.get_faces(result), (result.width, result.height)
+
+
+def threshold_detector(low_threshold, high_threshold):
+    """Yields 'low', 'high', and None events."""
+    assert low_threshold < high_threshold
+
+    event = None
+    prev_score = 0.0
+    while True:
+        score = (yield event)
+        if score > high_threshold > prev_score:
+            event = 'high'
+        elif score < low_threshold < prev_score:
+            event = 'low'
+        else:
+            event = None
+        prev_score = score
+
+
+def moving_average(size):
+    window = collections.deque(maxlen=size)
+    window.append((yield 0.0))
+    while True:
+        window.append((yield sum(window) / len(window)))
 
 
 def average_joy_score(faces):
     if faces:
-        return sum([face.joy_score for face in faces]) / len(faces)
+        return sum(face.joy_score for face in faces) / len(faces)
     return 0.0
 
 
@@ -82,59 +110,64 @@ def draw_rectangle(draw, x0, y0, x1, y1, border, fill=None, outline=None):
     for i in range(-border // 2, border // 2 + 1):
         draw.rectangle((x0 + i, y0 + i, x1 - i, y1 - i), fill=fill, outline=outline)
 
-class AtomicValue(object):
 
-    def __init__(self, value):
-        self._lock = threading.Lock()
-        self._value = value
-
-    @property
-    def value(self):
-        with self._lock:
-            return self._value
-
-    @value.setter
-    def value(self, value):
-        with self._lock:
-            self._value = value
+def scale_bounding_box(bounding_box, scale_x, scale_y):
+    x, y, w, h = bounding_box
+    return (x * scale_x, y * scale_y, w * scale_x, h * scale_y)
 
 
-class MovingAverage(object):
+def svg_overlay(faces, frame_size, joy_score):
+    width, height = frame_size
+    doc = svg.Svg(width=width, height=height)
 
-    def __init__(self, size):
-        self._window = collections.deque(maxlen=size)
+    for face in faces:
+        x, y, w, h = face.bounding_box
+        doc.add(svg.Rect(x=int(x), y=int(y), width=int(w), height=int(h), rx=10, ry=10,
+                         fill_opacity=0.3 * face.face_score,
+                         style='fill:red;stroke:white;stroke-width:4px'))
 
-    def next(self, value):
-        self._window.append(value)
-        return sum(self._window) / len(self._window)
+        doc.add(svg.Text('Joy: %.2f' % face.joy_score, x=x, y=y - 10,
+                         fill='red', font_size=30))
+
+    doc.add(svg.Text('Faces: %d Avg. joy: %.2f' % (len(faces), joy_score),
+            x=10, y=50, fill='red', font_size=40))
+    return str(doc)
 
 
-class Service(object):
+class Service:
 
     def __init__(self):
         self._requests = queue.Queue()
-        self._thread = threading.Thread(target=self._run)
+        self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
     def _run(self):
         while True:
             request = self._requests.get()
             if request is None:
+                self.shutdown()
                 break
             self.process(request)
             self._requests.task_done()
 
-    def join(self):
-        self._thread.join()
-
-    def stop(self):
-        self._requests.put(None)
-
     def process(self, request):
+        pass
+
+    def shutdown(self):
         pass
 
     def submit(self, request):
         self._requests.put(request)
+
+    def close(self):
+        self._requests.put(None)
+        self._thread.join()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self.close()
 
 
 class Player(Service):
@@ -158,8 +191,8 @@ class Photographer(Service):
         super().__init__()
         assert format in ('jpeg', 'bmp', 'png')
 
-        self._font = ImageFont.truetype('/usr/share/fonts/truetype/freefont/FreeSans.ttf', size=25)
-        self._faces = AtomicValue(())
+        self._font = ImageFont.truetype(FONT_FILE, size=25)
+        self._faces = ([], (0, 0))
         self._format = format
         self._folder = folder
 
@@ -167,8 +200,8 @@ class Photographer(Service):
         path = '%s/%s_annotated.%s' if annotated else '%s/%s.%s'
         return os.path.expanduser(path % (self._folder, timestamp, self._format))
 
-    def _draw_face(self, draw, face):
-        x, y, width, height = face.bounding_box
+    def _draw_face(self, draw, face, scale_x, scale_y):
+        x, y, width, height = scale_bounding_box(face.bounding_box, scale_x, scale_y)
         text = 'Joy: %.2f' % face.joy_score
         _, text_height = self._font.getsize(text)
         margin = 3
@@ -178,8 +211,12 @@ class Photographer(Service):
         draw_rectangle(draw, x, bottom, x + width, text_bottom, 3, fill='white', outline='white')
         draw.text((x + 1 + margin, y + height + 1 + margin), text, font=self._font, fill='black')
 
-    def process(self, camera):
-        faces = self._faces.value
+    def process(self, message):
+        if isinstance(message, tuple):
+            self._faces = message
+            return
+
+        camera = message
         timestamp = time.strftime('%Y-%m-%d_%H.%M.%S')
 
         stream = io.BytesIO()
@@ -192,6 +229,7 @@ class Photographer(Service):
             with open(filename, 'wb') as file:
                 file.write(stream.read())
 
+        faces, (width, height) = self._faces
         if faces:
             with ImageInference(face_detection.model()) as inference_facenet:
                 #resize
@@ -210,133 +248,148 @@ class Photographer(Service):
                 stream.seek(0)
                 image = Image.open(stream)
                 draw = ImageDraw.Draw(image)
+                scale_x, scale_y = image.width / width, image.height / height
                 for face in faces:
-                    self._draw_face(draw, face)
+                    self._draw_face(draw, face, scale_x, scale_y)
                 del draw
                 image.save(filename)
 
-        imgurl = update_imgur(filename)
-        update_line(imgurl)
-
     def update_faces(self, faces):
-        self._faces.value = faces
+        self.submit(faces)
 
     def shoot(self, camera):
         self.submit(camera)
 
 
-class Animator(object):
+class Animator(Service):
     """Controls RGB LEDs."""
 
-    def __init__(self, leds, done):
+    def __init__(self, leds):
+        super().__init__()
         self._leds = leds
-        self._done = done
-        self._joy_score = AtomicValue(0.0)
-        self._thread = threading.Thread(target=self._run)
-        self._thread.start()
 
-    def _run(self):
-        while not self._done.is_set():
-            joy_score = self._joy_score.value
+    def process(self, joy_score):
             if joy_score > 0:
-                self._leds.update(Leds.rgb_on(blend(JOY_COLOR, SAD_COLOR, joy_score)))
+                self._leds.update(Leds.rgb_on(Color.blend(JOY_COLOR, SAD_COLOR, joy_score)))
             else:
                 self._leds.update(Leds.rgb_off())
 
-    def update_joy_score(self, value):
-        self._joy_score.value = value
+    def shutdown(self):
+        self._leds.update(Leds.rgb_off())
 
-    def join(self):
-        self._thread.join()
+    def update_joy_score(self, joy_score):
+        self.submit(joy_score)
 
 
-class JoyDetector(object):
-
-    def __init__(self):
-        self._done = threading.Event()
-        signal.signal(signal.SIGINT, lambda signal, frame: self.stop())
-        signal.signal(signal.SIGTERM, lambda signal, frame: self.stop())
-        self.faceNum = 0
-
-    def stop(self):
+def joy_detector(num_frames, preview_alpha, image_format, image_folder,
+                 enable_streaming, streaming_bitrate, mdns_name):
+    done = threading.Event()
+    def stop():
         logger.info('Stopping...')
-        self._done.set()
+        done.set()
 
-    def run(self, num_frames, preview_alpha, image_format, image_folder):
-        logger.info('Starting...')
-        leds = Leds()
-        player = Player(gpio=22, bpm=10)
-        photographer = Photographer(image_format, image_folder)
-        animator = Animator(leds, self._done)
+    signal.signal(signal.SIGINT, lambda signum, frame: stop())
+    signal.signal(signal.SIGTERM, lambda signum, frame: stop())
 
-        try:
+    logger.info('Starting...')
+    with contextlib.ExitStack() as stack:
+        leds = stack.enter_context(Leds())
+        board = stack.enter_context(Board())
+        player = stack.enter_context(Player(gpio=BUZZER_GPIO, bpm=10))
+        photographer = stack.enter_context(Photographer(image_format, image_folder))
+        animator = stack.enter_context(Animator(leds))
             # Forced sensor mode, 1640x1232, full FoV. See:
             # https://picamera.readthedocs.io/en/release-1.13/fov.html#sensor-modes
             # This is the resolution inference run on.
-            with PiCamera(sensor_mode=4, resolution=(1640, 1232)) as camera, PrivacyLed(leds):
-                def take_photo():
-                    logger.info('Button pressed.')
-                    player.play(BEEP_SOUND)
-                    photographer.shoot(camera)
+        # Use half of that for video streaming (820x616).
+        camera = stack.enter_context(PiCamera(sensor_mode=4, resolution=(820, 616)))
+        stack.enter_context(PrivacyLed(leds))
 
-                # Blend the preview layer with the alpha value from the flags.
-                camera.start_preview(alpha=preview_alpha)
+        server = None
+        if enable_streaming:
+            server = stack.enter_context(StreamingServer(camera, bitrate=streaming_bitrate,
+                                                         mdns_name=mdns_name))
 
-                button = Button(23)
-                button.when_pressed = take_photo
+        def model_loaded():
+            logger.info('Model loaded.')
+            player.play(MODEL_LOAD_SOUND)
 
-                joy_score_moving_average = MovingAverage(10)
-                prev_joy_score = 0.0
-                with CameraInference(face_detection.model()) as inference:
-                    logger.info('Model loaded.')
-                    player.play(MODEL_LOAD_SOUND)
-                    for i, result in enumerate(inference.run()):
-                        faces = face_detection.get_faces(result)
-                        photographer.update_faces(faces)
+        def take_photo():
+            logger.info('Button pressed.')
+            player.play(BEEP_SOUND)
+            photographer.shoot(camera)
 
-                        joy_score = joy_score_moving_average.next(average_joy_score(faces))
-                        animator.update_joy_score(joy_score)
+        if preview_alpha > 0:
+            camera.start_preview(alpha=preview_alpha)
 
-                        if joy_score > JOY_SCORE_PEAK > prev_joy_score:
-                            player.play(JOY_SOUND)
-                        elif joy_score < JOY_SCORE_MIN < prev_joy_score:
-                            player.play(SAD_SOUND)
+        board.button.when_pressed = take_photo
 
-                        prev_joy_score = joy_score
+        joy_moving_average = moving_average(10)
+        joy_moving_average.send(None)  # Initialize.
+        joy_threshold_detector = threshold_detector(JOY_SCORE_LOW, JOY_SCORE_HIGH)
+        joy_threshold_detector.send(None)  # Initialize.
+        for faces, frame_size in run_inference(num_frames, model_loaded):
+            photographer.update_faces((faces, frame_size))
+            joy_score = joy_moving_average.send(average_joy_score(faces))
+            animator.update_joy_score(joy_score)
+            event = joy_threshold_detector.send(joy_score)
+            if event == 'high':
+                logger.info('High joy detected.')
+                player.play(JOY_SOUND)
+            elif event == 'low':
+                logger.info('Low joy detected.')
+                player.play(SAD_SOUND)
 
-                        if self._done.is_set() or i == num_frames:
-                            break
-        finally:
-            player.stop()
-            photographer.stop()
+            if server:
+                server.send_overlay(svg_overlay(faces, frame_size, joy_score))
 
-            player.join()
-            photographer.join()
-            animator.join()
+            if done.is_set():
+                break
+
+def preview_alpha(string):
+    value = int(string)
+    if value < 0 or value > 255:
+        raise argparse.ArgumentTypeError('Must be in [0...255] range.')
+    return value
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--num_frames', '-n', type=int, dest='num_frames', default=-1,
-        help='Number of frames to run for, -1 to not terminate')
-    parser.add_argument('--preview_alpha', '-pa', type=int, dest='preview_alpha', default=0,
-        help='Transparency value of the preview overlay (0-255).')
-    parser.add_argument('--image_format', type=str, dest='image_format', default='jpeg',
-        choices=('jpeg', 'bmp', 'png'), help='Format of captured images.')
-    parser.add_argument('--image_folder', type=str, dest='image_folder', default='~/Pictures',
-        help='Folder to save captured images.')
+    logging.basicConfig(level=logging.INFO)
+
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--num_frames', '-n', type=int, default=None,
+                        help='Number of frames to run for')
+    parser.add_argument('--preview_alpha', '-pa', type=preview_alpha, default=0,
+                        help='Video preview overlay transparency (0-255)')
+    parser.add_argument('--image_format', default='jpeg',
+                        choices=('jpeg', 'bmp', 'png'),
+                        help='Format of captured images')
+    parser.add_argument('--image_folder', default='~/Pictures',
+                        help='Folder to save captured images')
+    parser.add_argument('--blink_on_error', default=False, action='store_true',
+                        help='Blink red if error occurred')
+    parser.add_argument('--enable_streaming', default=False, action='store_true',
+                        help='Enable streaming server')
+    parser.add_argument('--streaming_bitrate', type=int, default=1000000,
+                        help='Streaming server video bitrate (kbps)')
+    parser.add_argument('--mdns_name', default='',
+                        help='Streaming server mDNS name')
     args = parser.parse_args()
 
-    if args.preview_alpha < 0 or args.preview_alpha > 255:
-        parser.error('Invalid preview_alpha value: %d' % args.preview_alpha)
+    try:
+        joy_detector(args.num_frames, args.preview_alpha, args.image_format, args.image_folder,
+                     args.enable_streaming, args.streaming_bitrate, args.mdns_name)
+    except KeyboardInterrupt:
+        pass
+    except Exception:
+        logger.exception('Exception while running joy demo.')
+        if args.blink_on_error:
+            with Leds() as leds:
+                leds.pattern = Pattern.blink(100)  # 10 Hz
+                leds.update(Leds.rgb_pattern(Color.RED))
+                time.sleep(1.0)
 
-    device = get_aiy_device_name()
-    if not device or not 'Vision' in device:
-        logger.error('AIY VisionBonnet is not detected.')
-        return
-
-    detector = JoyDetector()
-    detector.run(args.num_frames, args.preview_alpha, args.image_format, args.image_folder)
+    return 0
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
