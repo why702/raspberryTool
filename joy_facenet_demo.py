@@ -232,7 +232,7 @@ class Photographer(Service):
         faces, (width, height) = self._faces
         if faces:
             with stopwatch('Facenet'):
-                with ImageInference(face_detection.model()) as inference_facenet:
+                with ImageInference(face_recognition.model()) as inference_facenet:
                     #resize
                     stream.seek(0)
                     image = Image.open(stream)
@@ -240,9 +240,9 @@ class Photographer(Service):
                         cropArea = face.bounding_box
                         print(cropArea)
                         image = image.crop(cropArea)
-                        print(image)
-                        image = image.thumbnail((160,160),Image.ANTIALIAS)
-                        print(image)
+                        print(image.size)
+                        image = image.resize((160,160),Image.ANTIALIAS)
+                        print(image.size)
                         result = inference_facenet.run(image)
                         facesnet = face_recognition.get_faces(result)
                         print(facesnet)
