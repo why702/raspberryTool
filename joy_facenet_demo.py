@@ -231,20 +231,21 @@ class Photographer(Service):
 
         faces, (width, height) = self._faces
         if faces:
-            with ImageInference(face_detection.model()) as inference_facenet:
-                #resize
-                stream.seek(0)
-                image = Image.open(stream)
-                for face in faces:
-                    cropArea = face.bounding_box
-                    image.save('/home/pi/Pictures/test0.jpeg')
-                    image = image.crop(cropArea)
-                    image.save('/home/pi/Pictures/test1.jpeg')
-                    image = image.thumbnail((160,160),Image.ANTIALIAS)
-                    image.save('/home/pi/Pictures/test2.jpeg')
-                    result = inference_facenet.run(image)
-                    facesnet = face_recognition.get_faces(result)
-                    print(facesnet)
+            with stopwatch('Facenet'):
+                with ImageInference(face_detection.model()) as inference_facenet:
+                    #resize
+                    stream.seek(0)
+                    image = Image.open(stream)
+                    for face in faces:
+                        cropArea = face.bounding_box
+                        image.save('/home/pi/Pictures/test0.jpeg')
+                        image = image.crop(cropArea)
+                        image.save('/home/pi/Pictures/test1.jpeg')
+                        image = image.thumbnail((160,160),Image.ANTIALIAS)
+                        image.save('/home/pi/Pictures/test2.jpeg')
+                        result = inference_facenet.run(image)
+                        facesnet = face_recognition.get_faces(result)
+                        print(facesnet)
 
             filename = self._make_filename(timestamp, annotated=True)
             with stopwatch('Saving annotated %s' % filename):
