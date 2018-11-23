@@ -238,7 +238,7 @@ class Photographer(Service):
                     cropArea = face.bounding_box
                     image = image.crop(cropArea)
                     image = image.thumbnail((160,160),Image.ANTIALIAS)
-                    image.show()
+                    image.save('/home/pi/Pictures/test.jpeg')
                     result = inference_facenet.run(image)
                     facesnet = face_recognition.get_faces(result)
                     print(facesnet)
@@ -269,10 +269,10 @@ class Animator(Service):
         self._leds = leds
 
     def process(self, joy_score):
-            if joy_score > 0:
-                self._leds.update(Leds.rgb_on(Color.blend(JOY_COLOR, SAD_COLOR, joy_score)))
-            else:
-                self._leds.update(Leds.rgb_off())
+        if joy_score > 0:
+            self._leds.update(Leds.rgb_on(Color.blend(JOY_COLOR, SAD_COLOR, joy_score)))
+        else:
+            self._leds.update(Leds.rgb_off())
 
     def shutdown(self):
         self._leds.update(Leds.rgb_off())
@@ -298,9 +298,9 @@ def joy_detector(num_frames, preview_alpha, image_format, image_folder,
         player = stack.enter_context(Player(gpio=BUZZER_GPIO, bpm=10))
         photographer = stack.enter_context(Photographer(image_format, image_folder))
         animator = stack.enter_context(Animator(leds))
-            # Forced sensor mode, 1640x1232, full FoV. See:
-            # https://picamera.readthedocs.io/en/release-1.13/fov.html#sensor-modes
-            # This is the resolution inference run on.
+        # Forced sensor mode, 1640x1232, full FoV. See:
+        # https://picamera.readthedocs.io/en/release-1.13/fov.html#sensor-modes
+        # This is the resolution inference run on.
         # Use half of that for video streaming (820x616).
         camera = stack.enter_context(PiCamera(sensor_mode=4, resolution=(820, 616)))
         stack.enter_context(PrivacyLed(leds))
