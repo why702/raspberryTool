@@ -240,9 +240,9 @@ class Photographer(Service):
                         cropArea = face.bounding_box
                         print(cropArea)
                         image = image.crop(cropArea)
-                        image.save('/home/pi/Pictures/test1.jpeg')
+                        print(image)
                         image = image.thumbnail((160,160),Image.ANTIALIAS)
-                        image.save('/home/pi/Pictures/test2.jpeg')
+                        print(image)
                         result = inference_facenet.run(image)
                         facesnet = face_recognition.get_faces(result)
                         print(facesnet)
