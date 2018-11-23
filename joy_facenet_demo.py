@@ -239,9 +239,10 @@ class Photographer(Service):
                     for face in faces:
                         x, y, w, h = face.bounding_box
                         image = image.crop((x, y, x+w, y+h))
-                        print(image.size)
+                        # print(image.size)
                         image = image.resize((160,160),Image.ANTIALIAS)
-                        print(image.size)
+                        # print(image.size)
+                        image.save('/home/bill/Pictures/test.jpeg')
                         result = inference_facenet.run(image)
                         facesnet = face_recognition.get_faces(result)
                         print(facesnet)

@@ -33,8 +33,7 @@ def model():
 
 def get_faces(result):
     assert len(result.tensors) == 1
-    embeddings = utils.reshape(result.tensors['embeddings'].data, 512)
-    return [
-        Facenet(tuple(embedding))
-        for embedding in zip(embeddings)
-    ]
+    tensor = result.tensors['embeddings']
+    print(utils.shape_tuple(tensor.shape))
+    # assert utils.shape_tuple(tensor.shape) == (1, 1, 1, 2024)
+    return tuple(tensor.data)
