@@ -238,7 +238,7 @@ class Photographer(Service):
                     image = Image.open(stream)
                     for face in faces:
                         cropArea = face.bounding_box
-                        image.save('/home/pi/Pictures/test0.jpeg')
+                        print(cropArea)
                         image = image.crop(cropArea)
                         image.save('/home/pi/Pictures/test1.jpeg')
                         image = image.thumbnail((160,160),Image.ANTIALIAS)
