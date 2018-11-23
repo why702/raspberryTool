@@ -237,9 +237,8 @@ class Photographer(Service):
                     stream.seek(0)
                     image = Image.open(stream)
                     for face in faces:
-                        cropArea = face.bounding_box
-                        print(cropArea)
-                        image = image.crop(cropArea)
+                        x, y, w, h = face.bounding_box
+                        image = image.crop((x, y, x+w, y+h))
                         print(image.size)
                         image = image.resize((160,160),Image.ANTIALIAS)
                         print(image.size)
