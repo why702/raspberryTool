@@ -230,6 +230,7 @@ class Photographer(Service):
                 file.write(stream.read())
 
         faces, (width, height) = self._faces
+        print('face = {}'.format(faces))
         if faces:
             with stopwatch('Facenet'):
                 with ImageInference(face_recognition.model()) as inference_facenet:
