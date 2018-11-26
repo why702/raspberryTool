@@ -244,6 +244,7 @@ class Photographer(Service):
                         # print(image.size)
                         image.save('/home/bill/Pictures/test.jpeg')
                         result = inference_facenet.run(image)
+                        print(result)
                         facesnet = face_recognition.get_faces(result)
                         print(facesnet)
 
