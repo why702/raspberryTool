@@ -232,33 +232,39 @@ class Photographer(Service):
         faces, (width, height) = self._faces
         print('face = {}'.format(faces))
         if faces:
-            with stopwatch('Facenet'):
-                with ImageInference(face_recognition.model()) as inference_facenet:
-                    #resize
-                    stream.seek(0)
-                    image = Image.open(stream)
-                    for face in faces:
-                        x, y, w, h = face.bounding_box
-                        image = image.crop((x, y, x+w, y+h))
-                        # print(image.size)
-                        image = image.resize((160,160),Image.ANTIALIAS)
-                        # print(image.size)
-                        image.save('/home/bill/Pictures/test.jpeg')
-                        result = inference_facenet.run(image)
-                        print(result)
-                        facesnet = face_recognition.get_faces(result)
-                        print(facesnet)
+            for face in faces:
+                x, y, w, h = face.bounding_box
+                image = image.crop((x, y, x + w, y + h))
+                image = image.resize((160, 160), Image.ANTIALIAS)
+                image.save('/home/bill/Pictures/test.jpeg')
 
-            filename = self._make_filename(timestamp, annotated=True)
-            with stopwatch('Saving annotated %s' % filename):
-                stream.seek(0)
-                image = Image.open(stream)
-                draw = ImageDraw.Draw(image)
-                scale_x, scale_y = image.width / width, image.height / height
-                for face in faces:
-                    self._draw_face(draw, face, scale_x, scale_y)
-                del draw
-                image.save(filename)
+            # with stopwatch('Facenet'):
+            #     with ImageInference(face_recognition.model()) as inference_facenet:
+            #         #resize
+            #         stream.seek(0)
+            #         image = Image.open(stream)
+            #         for face in faces:
+            #             x, y, w, h = face.bounding_box
+            #             image = image.crop((x, y, x+w, y+h))
+            #             # print(image.size)
+            #             image = image.resize((160,160),Image.ANTIALIAS)
+            #             # print(image.size)
+            #             image.save('/home/bill/Pictures/test.jpeg')
+            #             result = inference_facenet.run(image)
+            #             print(result)
+            #             facesnet = face_recognition.get_faces(result)
+            #             print(facesnet)
+            #
+            # filename = self._make_filename(timestamp, annotated=True)
+            # with stopwatch('Saving annotated %s' % filename):
+            #     stream.seek(0)
+            #     image = Image.open(stream)
+            #     draw = ImageDraw.Draw(image)
+            #     scale_x, scale_y = image.width / width, image.height / height
+            #     for face in faces:
+            #         self._draw_face(draw, face, scale_x, scale_y)
+            #     del draw
+            #     image.save(filename)
 
     def update_faces(self, faces):
         self.submit(faces)
